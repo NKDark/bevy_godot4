@@ -6,6 +6,7 @@ use bevy::{
 use godot::engine::{resource_loader::CacheMode, ResourceLoader};
 
 pub struct GodotAssetsPlugin;
+
 impl Plugin for GodotAssetsPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugin(AssetPlugin {
@@ -23,17 +24,13 @@ impl Plugin for GodotAssetsPlugin {
 
 /// Allow for loading godot resources via Bevy's assets framework, can be used with bevy_asset_loader
 ///
-/// This is not a recommended feature due to issues with referencing a PackedScene resource 
-/// simultaneously in Godot during loading - and there currently isn't an easy way to make asset 
+/// This is not a recommended feature due to issues with referencing a PackedScene resource
+/// simultaneously in Godot during loading - and there currently isn't an easy way to make asset
 /// loading into a NonSend Bevy Resource single-threaded.
 #[derive(Default)]
 pub struct GodotResourceLoader;
 
 impl AssetLoader for GodotResourceLoader {
-    fn extensions(&self) -> &[&str] {
-        &["tscn", "scn", "res", "tres", "jpg", "png"]
-    }
-
     fn load<'a>(
         &'a self,
         _bytes: &'a [u8],
@@ -43,15 +40,15 @@ impl AssetLoader for GodotResourceLoader {
             let mut load_asset = || {
                 let mut resource_loader = ResourceLoader::singleton();
                 let loaded = resource_loader
-                    .load(
+                    .load_ex(
                         ("res://".to_owned()
                             + load_context.path().to_str().ok_or_else(|| {
                                 anyhow::anyhow!("failed to convert asset path to string")
                             })?)
                         .into(),
-                        "".into(),
-                        CacheMode::CACHE_MODE_REUSE,
                     )
+                    .cache_mode(CacheMode::CACHE_MODE_REUSE)
+                    .done()
                     .ok_or_else(|| {
                         anyhow::anyhow!("failed to load asset {}", load_context.path().display())
                     })?;
@@ -71,5 +68,9 @@ impl AssetLoader for GodotResourceLoader {
 
             Ok(())
         })
+    }
+
+    fn extensions(&self) -> &[&str] {
+        &["tscn", "scn", "res", "tres", "jpg", "png"]
     }
 }

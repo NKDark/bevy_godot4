@@ -104,11 +104,10 @@ fn spawn_scene(
         let packed_scene = match &mut scene.resource {
             GodotSceneResource::Resource(res) => res.get(),
             GodotSceneResource::Path(path) => ResourceLoader::singleton()
-                .load(
-                    path.into(),
-                    "PackedScene".into(),
-                    CacheMode::CACHE_MODE_REUSE,
-                )
+                .load_ex(path.into())
+                .type_hint("PackedScene".into())
+                .cache_mode(CacheMode::CACHE_MODE_REUSE)
+                .done()
                 .expect("packed scene to load"),
             #[cfg(feature = "assets")]
             GodotSceneResource::Handle(handle) => assets
@@ -120,7 +119,9 @@ fn spawn_scene(
         let instance = packed_scene
             .try_cast::<PackedScene>()
             .expect("resource to be a packed scene")
-            .instantiate(GenEditState::GEN_EDIT_STATE_DISABLED)
+            .instantiate_ex()
+            .edit_state(GenEditState::GEN_EDIT_STATE_DISABLED)
+            .done()
             .unwrap();
 
         match scene_tree
@@ -129,27 +130,27 @@ fn spawn_scene(
             .unwrap()
             .get_node("BevyAppSingleton".into())
         {
-            Some(mut app) => app.add_child(
-                instance.share(),
-                false,
-                InternalMode::INTERNAL_MODE_DISABLED,
-            ),
+            Some(mut app) => app
+                .add_child_ex(instance.clone())
+                .force_readable_name(false)
+                .internal(InternalMode::INTERNAL_MODE_DISABLED)
+                .done(),
             None => {
                 tracing::error!("attempted to add a child to the BevyAppSingleton autoload, but the BevyAppSingleton autoload wasn't found");
                 return;
             }
-        }
+        };
 
         if let Some(transform) = &scene.transform {
             match transform {
                 GodotSceneTransform::Transform2D(transform) => {
-                    match instance.share().try_cast::<Node2D>() {
+                    match instance.clone().try_cast::<Node2D>() {
                         Some(mut node2d) => node2d.set_global_transform(*transform),
                         None => tracing::error!("attempted to spawn a scene with a transform on Node that did not inherit from Node3D, the transform was not set"),
                     }
                 }
                 GodotSceneTransform::Transform3D(transform) => {
-                    match instance.share().try_cast::<Node3D>() {
+                    match instance.clone().try_cast::<Node3D>() {
                         Some(mut node3d) => node3d.set_global_transform(*transform),
                         None => tracing::error!("attempted to spawn a scene with a transform on Node that did not inherit from Node3D, the transform was not set"),
                     }

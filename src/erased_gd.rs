@@ -1,8 +1,13 @@
 use crate::prelude::*;
 use bevy::reflect::TypeUuid;
+use godot::obj::EngineClass;
+use godot::sys::GodotFfi;
 use godot::{
     engine::Resource,
-    obj::mem::{Memory, StaticRefCount},
+    obj::{
+        mem::{Memory, StaticRefCount},
+        RawGd,
+    },
     sys,
 };
 
@@ -37,7 +42,7 @@ impl ErasedGd {
     }
 }
 
-#[derive(Debug, TypeUuid, Resource)]
+#[derive(Debug, TypeUuid, BevyResource)]
 #[uuid = "c3bd07de-eade-4cb0-9392-7c21394286f8"]
 pub struct ErasedGdResource {
     resource_id: InstanceId,
@@ -53,7 +58,9 @@ impl ErasedGdResource {
     }
 
     pub fn new(reference: Gd<Resource>) -> Self {
-        StaticRefCount::maybe_inc_ref(&reference.share());
+        unsafe {
+            StaticRefCount::maybe_inc_ref::<Resource>(&RawGd::from_sys(reference.as_type_ptr()));
+        }
 
         Self {
             resource_id: reference.instance_id(),
@@ -63,12 +70,12 @@ impl ErasedGdResource {
 
 impl Clone for ErasedGdResource {
     fn clone(&self) -> Self {
-        StaticRefCount::maybe_inc_ref::<Resource>(
-            &Gd::try_from_instance_id(self.resource_id).unwrap(),
-        );
+        let res: Gd<Resource> = Gd::try_from_instance_id(self.resource_id).unwrap();
+
+        unsafe { StaticRefCount::maybe_inc_ref::<Resource>(&RawGd::from_sys(res.as_type_ptr())) };
 
         Self {
-            resource_id: self.resource_id.clone(),
+            resource_id: self.resource_id,
         }
     }
 }
@@ -76,10 +83,12 @@ impl Clone for ErasedGdResource {
 impl Drop for ErasedGdResource {
     fn drop(&mut self) {
         let gd = self.get();
-        let is_last = StaticRefCount::maybe_dec_ref(&gd); // may drop
+        let is_last = unsafe {
+            StaticRefCount::maybe_dec_ref::<Resource>(&RawGd::from_sys(gd.as_type_ptr()))
+        }; // may drop
         if is_last {
             unsafe {
-                sys::interface_fn!(object_destroy)(gd.obj_sys());
+                sys::interface_fn!(object_destroy)(gd.as_object_ptr());
             }
         }
     }
